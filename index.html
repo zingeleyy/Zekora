@@ -256,7 +256,9 @@ function layout(){
   });
 }
 window.addEventListener('resize', layout);
-window.addEventListener('orientationchange', () => setTimeout(layout, 50));
+if (window.matchMedia('(max-width: 768px)').matches) {
+  window.addEventListener('orientationchange', () => setTimeout(layout, 50));
+}
 if (img.complete) layout(); else img.addEventListener('load', layout);
 
 // --- audio ---

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>my music</title>
+<style>
+  :root{ color-scheme: light; }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:#0b1a3a;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color:#fff;
+  }
+  .wrap{
+    max-width:1100px;
+    margin:0 auto;
+    padding:20px 20px 60px;
+  }
+  .hint{
+    text-align:center;
+    font-size:13px;
+    letter-spacing:.02em;
+    color:#cfe0ff;
+    margin:0 0 14px;
+    opacity:.85;
+  }
+  #stage{
+    position:relative;
+    width:100%;
+    line-height:0;
+    border-radius:4px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  #collage{
+    display:block;
+    width:100%;
+    height:auto;
+    pointer-events:none;
+    user-select:none;
+  }
+  .spot{
+    position:absolute;
+    cursor:pointer;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .spot .label{
+    position:absolute;
+    left:0; right:0; bottom:-22px;
+    text-align:center;
+    font-size:11px;
+    font-weight:600;
+    color:#fff;
+    background:rgba(10,15,35,.85);
+    padding:2px 6px;
+    border-radius:3px;
+    opacity:0;
+    transform:translateY(-4px);
+    transition:opacity .2s ease, transform .2s ease;
+    white-space:nowrap;
+    pointer-events:none;
+    z-index:20;
+  }
+  .spot.active{
+    z-index:10;
+    transform: scale(1.16);
+  }
+  .spot.active .label{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  .now-playing{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%) translateY(12px);
+    background:#12142b;
+    color:#f4f1e6;
+    padding:9px 16px;
+    border-radius:999px;
+    font-size:13px;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    opacity:0;
+    transition:opacity .25s ease, transform .25s ease;
+    pointer-events:none;
+    box-shadow:0 10px 26px rgba(0,0,0,.4);
+    z-index:100;
+  }
+  .now-playing.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .now-playing .dot{
+    width:8px; height:8px; border-radius:50%;
+    background:#ff6b4a;
+    animation:pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1; transform:scale(1);}
+    50%{opacity:.35; transform:scale(.65);}
+  }
+
+  .debug-toggle{
+    position:fixed;
+    right:14px;
+    bottom:14px;
+    background:rgba(10,15,35,.75);
+    color:#cfe0ff;
+    border:1px solid rgba(255,255,255,.2);
+    font-size:11px;
+    padding:6px 10px;
+    border-radius:6px;
+    cursor:pointer;
+    z-index:200;
+  }
+  #stage.debug .spot{
+    outline: 1px dashed rgba(255,60,60,.9);
+    background: rgba(255,60,60,.08);
+  }
+  #stage.debug .spot .label{ opacity:1; transform:none; background:rgba(255,60,60,.85); }
+
+  @media (prefers-reduced-motion: reduce){
+    .spot, .now-playing{ transition:none; animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="hint">click (or tap) an artist to play — click again to stop</p>
+  <div id="stage">
+    <img id="collage" src="collage.png" alt="my music moodboard">
+  </div>
+</div>
+
+<div class="now-playing" id="nowPlaying">
+  <span class="dot"></span>
+  <span id="nowPlayingText">playing —</span>
+</div>
+
+<button class="debug-toggle" id="debugToggle">show hotspots (E)</button>
+
+<script>
+/*
+  HOTSPOTS
+  --------
+  Each entry is a box drawn over the ORIGINAL image, which is 2000 x 1500 px.
+  x1,y1 = top-left corner, x2,y2 = bottom-right corner, in those pixel units.
+  Press "E" (or tap "show hotspots") to see the boxes drawn on top of the
+  image so you can nudge these numbers until every box sits exactly on
+  the artist it should. freq is just the pitch of the placeholder demo tone —
+  set `audio` to a real file path (e.g. "audio/lana.mp3") to use a real clip.
+
+  A few of these I genuinely couldn't identify with confidence, so they're
+  labeled "unknown" — rename them once you know who's who.
+*/
+const SPOTS = [ 
+  { name:"Mitski",            x1:16, y1:25, x2:288, y2:282, audio:"Mitski - Washing Machine Heart.mp3" },
+  { name:"Queen",             x1:294,  y1:18,   x2:558,  y2:288,   audio:"Queen - Killer Queen (Top Of The Pops, 1974).mp3" },
+  { name:"Adele",             x1:573,  y1:18,   x2:839,  y2:280, audio:"Adele - Rolling in the Deep.mp3" },  { name:"Taeko Onuki",       x1:848,  y1:25,   x2:1107,  y2:284, audio:"Taeko Ohnuki - 4_00 AM - 1978.mp3" },
+  { name:"Michael Jackson",   x1:1120,  y1:27,   x2:1286,  y2:278, audio:"Chicago - Micheal Jackson.mp3" },
+  { name:"Taylor Swift",      x1:11,   y1:295,   x2:295,  y2:545, audio:"Taylor Swift - Cruel Summer.mp3" },
+  { name:"Matsubara Miki",    x1:294,  y1:288,  x2:562,  y2:537, audio:".mp3" },
+  { name:"Junko Yagami",      x1:569,  y1:307,  x2:837,  y2:547, audio:"Telephone Number - Junko Ohashi.mp3" },
+  { name:"Lana Del Rey",      x1:209,  y1:432,  x2:384,  y2:909, audio:"White Mustang - lanadelrey.mp3" },
+  { name:"Dua Lipa",          x1:516,  y1:580,  x2:835,  y2:899, audio:"Dua Lipa - Training Season.mp3" },
+  { name:"TV Girl",           x1:14,  y1:954,  x2:297,  y2:1252, audio:".mp3" },
+  { name:"Tame Impala",       x1:301,  y1:944,  x2:577,  y2:1255, audio:".mp3" },
+  { name:"boa",               x1:584,  y1:942,  x2:841,  y2:1246, audio:".mp3" },
+  { name:"Kate Bush",         x1:1600, y1:145,  x2:1690, y2:240, audio:null },
+  { name:"Amy Winehouse",     x1:1560, y1:270,  x2:1710, y2:375, audio:null },
+  { name:"Melanie Martinez",  x1:1390, y1:195,  x2:1540, y2:350, audio:null },
+  { name:"Nelly Furtado",     x1:1390, y1:355,  x2:1540, y2:500, audio:null },
+  { name:"Dolly Parton",      x1:1390, y1:505,  x2:1545, y2:650, audio:null }
+];
+
+const IMG_W = 2000, IMG_H = 1500;
+const stage = document.getElementById('stage');
+const img = document.getElementById('collage');
+const nowPlaying = document.getElementById('nowPlaying');
+const nowPlayingText = document.getElementById('nowPlayingText');
+
+const glowPalette = ["rgba(255,209,102,.85)","rgba(255,107,74,.85)","rgba(140,190,255,.85)","rgba(216,163,220,.85)","rgba(163,220,180,.85)"];
+
+const spotEls = SPOTS.map((s, i) => {
+  const el = document.createElement('div');
+  el.className = 'spot';
+  el.style.setProperty('--glow', glowPalette[i % glowPalette.length]);
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-label', 'Play ' + s.name);
+  el.innerHTML = `<span class="label">${s.name}</span>`;
+  stage.appendChild(el);
+  return el;
+});
+
+function layout(){
+  const w = img.clientWidth;
+  const scale = w / IMG_W;
+  const h = IMG_H * scale;
+  SPOTS.forEach((s, i) => {
+    const el = spotEls[i];
+    const left = s.x1 * scale, top = s.y1 * scale;
+    const bw = (s.x2 - s.x1) * scale, bh = (s.y2 - s.y1) * scale;
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    el.style.width = bw + 'px';
+    el.style.height = bh + 'px';
+  });
+}
+window.addEventListener('resize', layout);
+if (img.complete) layout(); else img.addEventListener('load', layout);
+
+// --- audio ---
+// Only one spot is ever allowed to make sound. Click (or tap) a tile to
+// play it, like opening a desktop icon — click it again, or click a
+// different tile, to switch. That's the only interaction: no hover
+// tricks, no separate touch logic.
+let _ctx = null;
+function getCtx(){ if(!_ctx) _ctx = new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
+function unlock(){ const c = getCtx(); if (c.state === 'suspended') c.resume(); }
+
+let active = null; // { el, stop }
+
+SPOTS.forEach((s, i) => {
+  const el = spotEls[i];
+  let audioEl = null;
+  if (s.audio){
+    audioEl = new Audio(s.audio);
+    audioEl.loop = true;
+    audioEl.volume = 0;
+  }
+  let osc = null, gain = null, lfo = null;
+  let fadeToken = 0;
+
+  function play(){
+    fadeToken++;
+    const token = fadeToken;
+    if (audioEl){
+      audioEl.currentTime = 0;
+      audioEl.volume = 0;
+      audioEl.play().catch(()=>{});
+      const start = performance.now();
+      (function step(now){
+        if (token !== fadeToken) return;
+        const t = Math.min(1, (now - start) / 150);
+        audioEl.volume = t * 0.8;
+        if (t < 1) requestAnimationFrame(step);
+      })(start);
+    } else {
+      const ctx = getCtx();
+      osc = ctx.createOscillator();
+      gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = s.freq;
+      gain.gain.value = 0;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 0.1);
+      lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 4;
+      lfoGain.gain.value = 3;
+      lfo.connect(lfoGain).connect(osc.frequency);
+      lfo.start();
+    }
+  }
+
+  function stop(){
+    fadeToken++; // cancels any fade-in still in flight
+    if (audioEl){
+      audioEl.pause();
+      audioEl.volume = 0;
+    } else if (osc){
+      const ctx = getCtx();
+      try{
+        gain.gain.cancelScheduledValues(ctx.currentTime);
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+        osc.stop(ctx.currentTime + 0.06);
+        lfo.stop(ctx.currentTime + 0.06);
+      }catch(e){}
+      osc = null; gain = null; lfo = null;
+    }
+  }
+
+  function toggle(){
+    unlock();
+    // clicking the tile that's already playing turns it off
+    if (active && active.el === el){
+      stop();
+      el.classList.remove('active');
+      active = null;
+      nowPlaying.classList.remove('show');
+      return;
+    }
+    // clicking a different tile switches immediately, no overlap
+    if (active){
+      active.stop();
+      active.el.classList.remove('active');
+    }
+    play();
+    el.classList.add('active');
+    active = { el, stop };
+    nowPlayingText.textContent = 'playing — ' + s.name;
+    nowPlaying.classList.add('show');
+  }
+
+  // one listener, works for mouse click and finger tap alike
+  el.addEventListener('click', toggle);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
+  });
+});
+
+// --- debug/calibration mode ---
+const debugToggle = document.getElementById('debugToggle');
+function toggleDebug(){ stage.classList.toggle('debug'); }
+debugToggle.addEventListener('click', toggleDebug);
+window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase()==='e') toggleDebug(); });
+</script>
+</body>
+</html>

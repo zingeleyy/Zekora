@@ -7,48 +7,52 @@
 <style>
   :root{ color-scheme: light; }
   *{box-sizing:border-box;}
-  html,body{
+  html, body{
     margin:0;
+    height:100%;
+    overflow:hidden; /* the image fills the screen, nothing to scroll */
     background:#0b1a3a;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color:#fff;
   }
-  .wrap{
-    max-width:1100px;
-    margin:0 auto;
-    padding:20px 20px 60px;
-  }
-  .hint{
-    text-align:center;
-    font-size:13px;
-    letter-spacing:.02em;
-    color:#cfe0ff;
-    margin:0 0 14px;
-    opacity:.85;
-  }
+
+  /* fills the entire viewport, on desktop and mobile alike, like a
+     desktop wallpaper — the image is scaled up and cropped (never
+     stretched or letterboxed) to always cover the whole screen */
   #stage{
-    position:relative;
-    width:100%;
-    line-height:0;
-    border-radius:4px;
+    position:fixed;
+    inset:0;
     overflow:hidden;
-    box-shadow:0 20px 60px rgba(0,0,0,.5);
-    /* lets a two-finger pinch zoom the image itself for precise tapping,
-       without the whole page also panning around */
-    touch-action: pan-y pinch-zoom;
   }
   #collage{
-    display:block;
-    width:100%;
-    height:auto;
+    position:absolute;
+    /* left/top/width/height are set in JS, based on actual screen size */
     pointer-events:none;
     user-select:none;
+    display:block;
   }
+
+  .hint{
+    position:fixed;
+    top:14px;
+    left:50%;
+    transform:translateX(-50%);
+    text-align:center;
+    font-size:12px;
+    letter-spacing:.02em;
+    color:#fff;
+    background:rgba(10,15,35,.55);
+    padding:6px 14px;
+    border-radius:999px;
+    z-index:60;
+    pointer-events:none;
+    opacity:.9;
+  }
+
   .spot{
     position:absolute;
     cursor:pointer;
     transition: transform .28s cubic-bezier(.2,.8,.2,1);
-    /* mobile: kill the 300ms tap delay and the grey flash on tap */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
@@ -81,7 +85,7 @@
   .now-playing{
     position:fixed;
     left:50%;
-    bottom:22px;
+    bottom:calc(18px + env(safe-area-inset-bottom));
     transform:translateX(-50%) translateY(12px);
     background:#12142b;
     color:#f4f1e6;
@@ -118,7 +122,7 @@
   .debug-toggle{
     position:fixed;
     right:14px;
-    bottom:14px;
+    bottom:calc(14px + env(safe-area-inset-bottom));
     background:rgba(10,15,35,.75);
     color:#cfe0ff;
     border:1px solid rgba(255,255,255,.2);
@@ -134,71 +138,9 @@
   }
   #stage.debug .spot .label{ opacity:1; transform:none; background:rgba(255,60,60,.85); }
 
-  /* small phones: shrink and reposition the dev-only debug button so it
-     never covers the bottom of the image or the now-playing pill */
   @media (max-width: 480px){
-    .wrap{ padding:12px 10px 90px; }
-    .hint{ font-size:12px; }
-    .debug-toggle{
-      right:8px; bottom:calc(72px + env(safe-area-inset-bottom));
-      font-size:10px; padding:6px 9px;
-    }
-  }
-
-  /* the floating pill is only for wider screens; phones get the full
-     bottom bar below instead */
-  @media (max-width: 768px){
-    .now-playing{ display:none; }
-  }
-
-  /* --- mobile mini-player: fills the empty space at the bottom of the
-     screen on phones, Spotify-style. Hidden entirely above 768px. --- */
-  .mobile-player{ display:none; }
-  @media (max-width: 768px){
-    .mobile-player{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      position:fixed;
-      left:0; right:0; bottom:0;
-      height:64px;
-      padding:0 14px calc(env(safe-area-inset-bottom));
-      background:linear-gradient(180deg, #141a35, #0b1330);
-      border-top:1px solid rgba(255,255,255,.08);
-      box-shadow:0 -10px 30px rgba(0,0,0,.35);
-      z-index:150;
-    }
-    .mp-art{
-      width:40px; height:40px;
-      border-radius:6px;
-      flex:0 0 auto;
-      background: linear-gradient(135deg, var(--mp-glow, #3a4a7a), #12142b);
-      transition: background .3s ease;
-      display:flex; align-items:center; justify-content:center;
-      font-size:16px;
-    }
-    .mp-info{ flex:1 1 auto; min-width:0; }
-    .mp-title{
-      color:#fff; font-size:13px; font-weight:600;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
-    .mp-sub{
-      color:#9fb3dd; font-size:11px; margin-top:1px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
-    .mp-eq{
-      display:flex; gap:3px; align-items:flex-end; height:16px;
-      flex:0 0 auto; margin-right:2px;
-      opacity:0; transition:opacity .2s ease;
-    }
-    .mobile-player.playing .mp-eq{ opacity:1; }
-    .mp-eq span{
-      width:3px; background:#ff6b4a; border-radius:1px;
-      animation: mp-bounce .9s ease-in-out infinite;
-    }
-    .mp-eq span:nth-child(2){ animation-delay:.15s; }
-    .mp-eq span:nth-child(3){ animation-delay:.3s; }
-    @keyframes mp-bounce{ 0%,100%{height:3px;} 50%{height:14px;} }
+    .hint{ font-size:11px; padding:5px 12px; }
+    .debug-toggle{ font-size:10px; padding:6px 9px; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -207,25 +149,16 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <p class="hint">tap an artist to play — tap again to stop</p>
-  <div id="stage">
-    <img id="collage" src="mymusic/collage.png" alt="my music moodboard">
-  </div>
+
+<p class="hint">tap an artist to play — tap again to stop</p>
+
+<div id="stage">
+  <img id="collage" src="mymusic/collage.png" alt="my music moodboard">
 </div>
 
 <div class="now-playing" id="nowPlaying">
   <span class="dot"></span>
   <span id="nowPlayingText">playing —</span>
-</div>
-
-<div class="mobile-player" id="mobilePlayer">
-  <div class="mp-art" id="mpArt">🎵</div>
-  <div class="mp-info">
-    <div class="mp-title" id="mpTitle">Nothing playing</div>
-    <div class="mp-sub" id="mpSub">tap an artist above</div>
-  </div>
-  <div class="mp-eq" id="mpEq"><span></span><span></span><span></span></div>
 </div>
 
 <button class="debug-toggle" id="debugToggle">show hotspots (E)</button>
@@ -263,22 +196,15 @@ const SPOTS = [
 ];
 
 const IMG_W = 2000, IMG_H = 1500;
-// Minimum on-screen touch target, in CSS px, on top of whatever the box's
-// natural rendered size is — this is the actual mobile fix. A box that's
-// only 20px wide on a phone is nearly impossible to tap accurately; this
-// pads it back out to at least this size, centered on the same spot,
-// without changing anything about how big it looks (spots stay invisible
-// either way, this just widens the clickable/tappable area).
+// Minimum on-screen touch/click target, in CSS px — pads out any box
+// that would otherwise render too small to tap or click accurately,
+// centered on the same spot, without changing how it looks.
 const MIN_TOUCH_PX = 40;
 
 const stage = document.getElementById('stage');
 const img = document.getElementById('collage');
 const nowPlaying = document.getElementById('nowPlaying');
 const nowPlayingText = document.getElementById('nowPlayingText');
-const mobilePlayer = document.getElementById('mobilePlayer');
-const mpArt = document.getElementById('mpArt');
-const mpTitle = document.getElementById('mpTitle');
-const mpSub = document.getElementById('mpSub');
 
 const glowPalette = ["rgba(255,209,102,.85)","rgba(255,107,74,.85)","rgba(140,190,255,.85)","rgba(216,163,220,.85)","rgba(163,220,180,.85)"];
 
@@ -294,27 +220,40 @@ const spotEls = SPOTS.map((s, i) => {
   return el;
 });
 
+// Fills the whole screen the way a desktop wallpaper does: scale the
+// image up just enough that it covers the full width AND full height
+// (never both at once, unless the aspect ratio matches exactly), then
+// center it — cropping whichever dimension overflows. Using
+// window.innerWidth/innerHeight directly (rather than CSS vh/vw) avoids
+// the classic mobile-browser bug where 100vh includes space the address
+// bar is about to cover.
 function layout(){
-  const w = img.clientWidth;
-  const scale = w / IMG_W;
-  const stageW = w, stageH = IMG_H * scale;
+  const cw = window.innerWidth;
+  const ch = window.innerHeight;
+  const scale = Math.max(cw / IMG_W, ch / IMG_H);
+  const rw = IMG_W * scale, rh = IMG_H * scale;
+  const offX = (cw - rw) / 2; // usually <= 0: image is wider than the screen
+  const offY = (ch - rh) / 2; // usually <= 0: image is taller than the screen
+
+  img.style.width = rw + 'px';
+  img.style.height = rh + 'px';
+  img.style.left = offX + 'px';
+  img.style.top = offY + 'px';
 
   SPOTS.forEach((s, i) => {
     const el = spotEls[i];
-    let left = s.x1 * scale, top = s.y1 * scale;
+    let left = offX + s.x1 * scale, top = offY + s.y1 * scale;
     let bw = (s.x2 - s.x1) * scale, bh = (s.y2 - s.y1) * scale;
 
-    // pad tiny boxes up to a comfortably tappable size, centered on the
-    // same point, clamped so they don't run off the edge of the image
     if (bw < MIN_TOUCH_PX){
       const cx = left + bw / 2;
       bw = MIN_TOUCH_PX;
-      left = Math.max(0, Math.min(stageW - bw, cx - bw / 2));
+      left = Math.max(0, Math.min(cw - bw, cx - bw / 2));
     }
     if (bh < MIN_TOUCH_PX){
       const cy = top + bh / 2;
       bh = MIN_TOUCH_PX;
-      top = Math.max(0, Math.min(stageH - bh, cy - bh / 2));
+      top = Math.max(0, Math.min(ch - bh, cy - bh / 2));
     }
 
     el.style.left = left + 'px';
@@ -346,7 +285,7 @@ SPOTS.forEach((s, i) => {
     audioEl = new Audio(s.audio);
     audioEl.loop = true;
     audioEl.volume = 0;
-    audioEl.playsInline = true; // required on iOS so it doesn't try to go fullscreen
+    audioEl.playsInline = true;
     audioEl.preload = 'auto';
   }
   let osc = null, gain = null, lfo = null;
@@ -386,7 +325,7 @@ SPOTS.forEach((s, i) => {
   }
 
   function stop(){
-    fadeToken++; // cancels any fade-in still in flight
+    fadeToken++;
     if (audioEl){
       audioEl.pause();
       audioEl.volume = 0;
@@ -410,10 +349,6 @@ SPOTS.forEach((s, i) => {
       el.classList.remove('active');
       active = null;
       nowPlaying.classList.remove('show');
-      mobilePlayer.classList.remove('playing');
-      mpArt.style.removeProperty('--mp-glow');
-      mpTitle.textContent = 'Nothing playing';
-      mpSub.textContent = 'tap an artist above';
       return;
     }
     if (active){
@@ -425,13 +360,8 @@ SPOTS.forEach((s, i) => {
     active = { el, stop };
     nowPlayingText.textContent = 'playing — ' + s.name;
     nowPlaying.classList.add('show');
-    mobilePlayer.classList.add('playing');
-    mpArt.style.setProperty('--mp-glow', getComputedStyle(el).getPropertyValue('--glow'));
-    mpTitle.textContent = s.name;
-    mpSub.textContent = s.audio ? 'now playing' : 'demo tone · add a real clip';
   }
 
-  // one listener, works for mouse click and finger tap alike
   el.addEventListener('click', toggle);
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }

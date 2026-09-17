@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>my music</title>
 <style>
   :root{ color-scheme: light; }
@@ -33,6 +33,9 @@
     border-radius:4px;
     overflow:hidden;
     box-shadow:0 20px 60px rgba(0,0,0,.5);
+    /* lets a two-finger pinch zoom the image itself for precise tapping,
+       without the whole page also panning around */
+    touch-action: pan-y pinch-zoom;
   }
   #collage{
     display:block;
@@ -45,6 +48,9 @@
     position:absolute;
     cursor:pointer;
     transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    /* mobile: kill the 300ms tap delay and the grey flash on tap */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
   .spot .label{
     position:absolute;
@@ -90,9 +96,16 @@
     pointer-events:none;
     box-shadow:0 10px 26px rgba(0,0,0,.4);
     z-index:100;
+    max-width:calc(100% - 28px);
   }
   .now-playing.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .now-playing span:last-child{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
   .now-playing .dot{
+    flex:0 0 auto;
     width:8px; height:8px; border-radius:50%;
     background:#ff6b4a;
     animation:pulse 1s ease-in-out infinite;
@@ -110,7 +123,7 @@
     color:#cfe0ff;
     border:1px solid rgba(255,255,255,.2);
     font-size:11px;
-    padding:6px 10px;
+    padding:8px 12px;
     border-radius:6px;
     cursor:pointer;
     z-index:200;
@@ -121,6 +134,18 @@
   }
   #stage.debug .spot .label{ opacity:1; transform:none; background:rgba(255,60,60,.85); }
 
+  /* small phones: shrink and reposition the dev-only debug button so it
+     never covers the bottom of the image or the now-playing pill */
+  @media (max-width: 480px){
+    .wrap{ padding:12px 10px 70px; }
+    .hint{ font-size:12px; }
+    .debug-toggle{
+      right:8px; bottom:8px;
+      font-size:10px; padding:6px 9px;
+    }
+    .now-playing{ bottom:56px; font-size:12px; }
+  }
+
   @media (prefers-reduced-motion: reduce){
     .spot, .now-playing{ transition:none; animation:none; }
   }
@@ -128,7 +153,7 @@
 </head>
 <body>
 <div class="wrap">
-  <p class="hint">click (or tap) an artist to play — click again to stop</p>
+  <p class="hint">tap an artist to play — tap again to stop</p>
   <div id="stage">
     <img id="collage" src="mymusic/collage.png" alt="my music moodboard">
   </div>
@@ -149,34 +174,39 @@
   x1,y1 = top-left corner, x2,y2 = bottom-right corner, in those pixel units.
   Press "E" (or tap "show hotspots") to see the boxes drawn on top of the
   image so you can nudge these numbers until every box sits exactly on
-  the artist it should. freq is just the pitch of the placeholder demo tone —
-  set `audio` to a real file path (e.g. "audio/lana.mp3") to use a real clip.
-
-  A few of these I genuinely couldn't identify with confidence, so they're
-  labeled "unknown" — rename them once you know who's who.
+  the artist it should. freq is the pitch of the placeholder demo tone,
+  used only when `audio` is null.
 */
-const SPOTS = [ 
-  { name:"Mitski",            x1:16, y1:25, x2:288, y2:282, audio:"mymusic/Mitski - Washing Machine Heart.mp3" },
-  { name:"Queen",             x1:294,  y1:18,   x2:558,  y2:288,   audio:"mymusic/Queen - Killer Queen (Top Of The Pops, 1974).mp3" },
-  { name:"Adele",             x1:573,  y1:18,   x2:839,  y2:280, audio:"mymusic/Adele - Rolling in the Deep.mp3" },  
-  { name:"Taeko Onuki",       x1:848,  y1:25,   x2:1107,  y2:284, audio:"Taeko Ohnuki - 4_00 AM - 1978.mp3" },
-  { name:"Michael Jackson",   x1:1120,  y1:27,   x2:1286,  y2:278, audio:"mymusic/Chicago - Micheal Jackson.mp3" },
-  { name:"Taylor Swift",      x1:11,   y1:295,   x2:295,  y2:545, audio:"mymusic/Taylor Swift - Cruel Summer.mp3" },
-  { name:"Matsubara Miki",    x1:294,  y1:288,  x2:562,  y2:537, audio:"mymusic/Miki Matsubara - Stay With Me (Club Mix).mp3" },
-  { name:"Junko Yagami",      x1:569,  y1:307,  x2:837,  y2:547, audio:"mymusic/Telephone Number - Junko Ohashi.mp3" },
-  { name:"Lana Del Rey",      x1:209,  y1:432,  x2:384,  y2:909, audio:"mymusic/White Mustang - lanadelrey.mp3" },
-  { name:"Dua Lipa",          x1:516,  y1:580,  x2:835,  y2:899, audio:"mymusic/Dua Lipa - Training Season.mp3" },
-  { name:"TV Girl",           x1:14,  y1:954,  x2:297,  y2:1252, audio:"mymusic/.mp3" },
-  { name:"Tame Impala",       x1:301,  y1:944,  x2:577,  y2:1255, audio:"mymusic/.mp3" },
-  { name:"boa",               x1:584,  y1:942,  x2:841,  y2:1246, audio:"mymusic/.mp3" },
-  { name:"Kate Bush",         x1:1600, y1:145,  x2:1690, y2:240, audio:null },
-  { name:"Amy Winehouse",     x1:1560, y1:270,  x2:1710, y2:375, audio:null },
-  { name:"Melanie Martinez",  x1:1390, y1:195,  x2:1540, y2:350, audio:null },
-  { name:"Nelly Furtado",     x1:1390, y1:355,  x2:1540, y2:500, audio:null },
-  { name:"Dolly Parton",      x1:1390, y1:505,  x2:1545, y2:650, audio:null }
+const SPOTS = [
+  { name:"Mitski",            x1:16,  y1:25,  x2:288, y2:282,  freq:174, audio:"mymusic/Mitski - Washing Machine Heart.mp3" },
+  { name:"Queen",             x1:294, y1:18,  x2:558, y2:288,  freq:196, audio:"mymusic/Queen - Killer Queen (Top Of The Pops, 1974).mp3" },
+  { name:"Adele",             x1:573, y1:18,  x2:839, y2:280,  freq:246, audio:"mymusic/Adele - Rolling in the Deep.mp3" },
+  { name:"Taeko Onuki",       x1:848, y1:25,  x2:1107,y2:284,  freq:262, audio:"mymusic/Taeko Ohnuki - 4_00 AM - 1978.mp3" },
+  { name:"Michael Jackson",   x1:1120,y1:27,  x2:1286,y2:278,  freq:329, audio:"mymusic/Chicago - Micheal Jackson.mp3" },
+  { name:"Taylor Swift",      x1:11,  y1:295, x2:295, y2:545,  freq:294, audio:"mymusic/Taylor Swift - Cruel Summer.mp3" },
+  { name:"Matsubara Miki",    x1:294, y1:288, x2:562, y2:537,  freq:277, audio:"mymusic/Miki Matsubara - Stay With Me (Club Mix).mp3" },
+  { name:"Junko Yagami",      x1:569, y1:307, x2:837, y2:547,  freq:311, audio:"mymusic/Telephone Number - Junko Ohashi.mp3" },
+  { name:"Lana Del Rey",      x1:209, y1:432, x2:384, y2:909,  freq:220, audio:"mymusic/White Mustang - lanadelrey.mp3" },
+  { name:"Dua Lipa",          x1:516, y1:580, x2:835, y2:899,  freq:262, audio:"mymusic/Dua Lipa - Training Season.mp3" },
+  { name:"TV Girl",           x1:14,  y1:954, x2:297, y2:1252, freq:233, audio:null },
+  { name:"Tame Impala",       x1:301, y1:944, x2:577, y2:1255, freq:174, audio:null },
+  { name:"boa",               x1:584, y1:942, x2:841, y2:1246, freq:261, audio:null },
+  { name:"Kate Bush",         x1:1600,y1:145, x2:1690,y2:240,  freq:415, audio:null },
+  { name:"Amy Winehouse",     x1:1560,y1:270, x2:1710,y2:375,  freq:207, audio:null },
+  { name:"Melanie Martinez",  x1:1390,y1:195, x2:1540,y2:350,  freq:349, audio:null },
+  { name:"Nelly Furtado",     x1:1390,y1:355, x2:1540,y2:500,  freq:392, audio:null },
+  { name:"Dolly Parton",      x1:1390,y1:505, x2:1545,y2:650,  freq:220, audio:null }
 ];
 
 const IMG_W = 2000, IMG_H = 1500;
+// Minimum on-screen touch target, in CSS px, on top of whatever the box's
+// natural rendered size is — this is the actual mobile fix. A box that's
+// only 20px wide on a phone is nearly impossible to tap accurately; this
+// pads it back out to at least this size, centered on the same spot,
+// without changing anything about how big it looks (spots stay invisible
+// either way, this just widens the clickable/tappable area).
+const MIN_TOUCH_PX = 40;
+
 const stage = document.getElementById('stage');
 const img = document.getElementById('collage');
 const nowPlaying = document.getElementById('nowPlaying');
@@ -199,11 +229,26 @@ const spotEls = SPOTS.map((s, i) => {
 function layout(){
   const w = img.clientWidth;
   const scale = w / IMG_W;
-  const h = IMG_H * scale;
+  const stageW = w, stageH = IMG_H * scale;
+
   SPOTS.forEach((s, i) => {
     const el = spotEls[i];
-    const left = s.x1 * scale, top = s.y1 * scale;
-    const bw = (s.x2 - s.x1) * scale, bh = (s.y2 - s.y1) * scale;
+    let left = s.x1 * scale, top = s.y1 * scale;
+    let bw = (s.x2 - s.x1) * scale, bh = (s.y2 - s.y1) * scale;
+
+    // pad tiny boxes up to a comfortably tappable size, centered on the
+    // same point, clamped so they don't run off the edge of the image
+    if (bw < MIN_TOUCH_PX){
+      const cx = left + bw / 2;
+      bw = MIN_TOUCH_PX;
+      left = Math.max(0, Math.min(stageW - bw, cx - bw / 2));
+    }
+    if (bh < MIN_TOUCH_PX){
+      const cy = top + bh / 2;
+      bh = MIN_TOUCH_PX;
+      top = Math.max(0, Math.min(stageH - bh, cy - bh / 2));
+    }
+
     el.style.left = left + 'px';
     el.style.top = top + 'px';
     el.style.width = bw + 'px';
@@ -211,13 +256,13 @@ function layout(){
   });
 }
 window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => setTimeout(layout, 50));
 if (img.complete) layout(); else img.addEventListener('load', layout);
 
 // --- audio ---
-// Only one spot is ever allowed to make sound. Click (or tap) a tile to
-// play it, like opening a desktop icon — click it again, or click a
-// different tile, to switch. That's the only interaction: no hover
-// tricks, no separate touch logic.
+// Only one spot is ever allowed to make sound. Click/tap a tile to play
+// it, like opening a desktop icon — click it again, or click a different
+// tile, to switch. Same code path for mouse and touch.
 let _ctx = null;
 function getCtx(){ if(!_ctx) _ctx = new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
 function unlock(){ const c = getCtx(); if (c.state === 'suspended') c.resume(); }
@@ -231,6 +276,8 @@ SPOTS.forEach((s, i) => {
     audioEl = new Audio(s.audio);
     audioEl.loop = true;
     audioEl.volume = 0;
+    audioEl.playsInline = true; // required on iOS so it doesn't try to go fullscreen
+    audioEl.preload = 'auto';
   }
   let osc = null, gain = null, lfo = null;
   let fadeToken = 0;
@@ -288,7 +335,6 @@ SPOTS.forEach((s, i) => {
 
   function toggle(){
     unlock();
-    // clicking the tile that's already playing turns it off
     if (active && active.el === el){
       stop();
       el.classList.remove('active');
@@ -296,7 +342,6 @@ SPOTS.forEach((s, i) => {
       nowPlaying.classList.remove('show');
       return;
     }
-    // clicking a different tile switches immediately, no overlap
     if (active){
       active.stop();
       active.el.classList.remove('active');
@@ -315,7 +360,7 @@ SPOTS.forEach((s, i) => {
   });
 });
 
-// --- debug/calibration mode ---
+// --- debug mode ---
 const debugToggle = document.getElementById('debugToggle');
 function toggleDebug(){ stage.classList.toggle('debug'); }
 debugToggle.addEventListener('click', toggleDebug);
